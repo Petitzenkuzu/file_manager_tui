@@ -4,6 +4,7 @@ use std::fs::FileType as StdFileType;
 use std::fs::Metadata as StdMetadata;
 use std::path::PathBuf;
 use std::fs;
+use std::fmt;
 #[derive(Debug, Clone)]
 pub struct File {
     pub name: String,
@@ -47,6 +48,23 @@ pub enum FileType {
     Folder,
     Link { target: PathBuf, is_dead: bool },
     Unknown
+}
+
+impl fmt::Display for FileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileType::File => write!(f, "File"),
+            FileType::Folder => write!(f, "Folder"),
+            FileType::Link { is_dead, .. } => {
+                if *is_dead {
+                    write!(f, "Link (Dead)")
+                } else {
+                    write!(f, "Link (Alive)")
+                }
+            },
+            FileType::Unknown => write!(f, "Unknown"),
+        }
+    }
 }
 
 impl TryFrom<&DirEntry> for FileType {

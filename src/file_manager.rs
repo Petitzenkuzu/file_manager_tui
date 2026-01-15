@@ -14,6 +14,14 @@ impl FileManager {
         Ok(Self { path, files })
     }
 
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    pub fn files(&self) -> &Vec<File> {
+        &self.files
+    }
+
     pub fn go_to_parent(&mut self) -> std::io::Result<()> {
         self.path = match self.path.parent() {
             Some(parent) => parent.to_path_buf(),
