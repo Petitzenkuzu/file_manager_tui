@@ -8,10 +8,11 @@ use std::fmt;
 use chrono::{DateTime, Local};
 use ratatui::text::Line;
 use crate::utility::string::expand_or_truncate;
+use crate::utility::float::truncate;
 
-pub static MAX_NAME_WIDTH: usize = 17;
-pub static MAX_SIZE_WIDTH: usize = 6;
-pub static MAX_TYPE_WIDTH: usize = 8;
+pub static MAX_NAME_WIDTH: usize = 30;
+pub static MAX_SIZE_WIDTH: usize = 10;
+pub static MAX_TYPE_WIDTH: usize = 13;
 pub static MAX_MODIFIED_WIDTH: usize = 19;
 
 #[derive(Debug, Clone)]
@@ -71,25 +72,25 @@ impl Metadata {
 
 #[derive(Debug, Copy, Clone)]
 pub enum Size {
-    Bytes(u64),
-    KB(u64),
-    MB(u64),
-    GB(u64),
+    Bytes(u16),
+    KB(f32),
+    MB(f32),
+    GB(f32),
 }
 
 impl From<u64> for Size {
     fn from(size: u64) -> Self {
         if size < 1024 {
-            Size::Bytes(size)
+            Size::Bytes(size as u16)
         }
         else if size < 1024 * 1024 {
-            Size::KB(size / 1024)
+            Size::KB(truncate((size as f32) / 1024.0, 2))
         }
         else if size < 1024 * 1024 * 1024 {
-            Size::MB(size / 1024 / 1024)
+            Size::MB(truncate((size as f32) / 1024.0 / 1024.0, 2))
         }
         else {
-            Size::GB(size / 1024 / 1024 / 1024)
+            Size::GB(truncate((size as f32) / 1024.0 / 1024.0 / 1024.0, 2))
         }
     }
 }
@@ -99,8 +100,8 @@ impl ToString for Size{
         match self {
             Size::Bytes(size) => format!("{}B", size),
             Size::KB(size) => format!("{}KB", size),
-            Size::MB(size) => format!("{} MB", size),
-            Size::GB(size) => format!("{} GB", size),
+            Size::MB(size) => format!("{}MB", size),
+            Size::GB(size) => format!("{}GB", size),
         }
     }
 }
