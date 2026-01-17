@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use ratatui::widgets::ListState;
 use crate::file;
 use crate::utility::string::{expand_or_truncate, center};
+use crate::file_manager::Action;
 pub struct App {
     pub file_manager: FileManager,
     list_state: ListState,
@@ -33,19 +34,66 @@ impl App {
                     if code == KeyCode::Char('q') {
                         break Ok(());
                     }
-                    if code == KeyCode::Up {
-                        self.list_state.scroll_up_by(1);
-                    }
-                    if code == KeyCode::Down {
-                        self.list_state.scroll_down_by(1);
-                    }
-                    if code == KeyCode::Enter {
-                        self.file_manager.enter(self.list_state.selected().unwrap_or(0))?;
+                    else {
+                        self.dispatch(code)?;
                     }
                 },
                 _ => {}
             }
         }
+    }
+
+    pub fn dispatch(&mut self, code: KeyCode) -> io::Result<()> {
+        match code {
+            KeyCode::Up => {
+                let selected = match self.list_state.selected() {
+                    Some(selected) => selected,
+                    None => 0,
+                };
+                if selected == 0 {
+                    self.list_state.select(Some(self.file_manager.files().len() - 1));
+                }
+                else {
+                    self.list_state.scroll_up_by(1);
+                }
+            },
+            KeyCode::Down => {
+                let selected = match self.list_state.selected() {
+                    Some(selected) => selected,
+                    None => 0,
+                };
+                if selected == self.file_manager.files().len() - 1 {
+                    self.list_state.select(Some(0));
+                }
+                else {
+                    self.list_state.scroll_down_by(1);
+                }
+            },
+            KeyCode::Enter => {
+                let selected = match self.list_state.selected() {
+                    Some(selected) => selected,
+                    None => return Ok(()),
+                };
+                let res = self.file_manager.dispatch(Action::Open(self.list_state.selected().unwrap_or(0)));
+                if res.is_err() {
+                    eprintln!("Error: {}", res.err().unwrap());
+                }
+                else {
+                    self.list_state.select(Some(0));
+                }
+            },
+            KeyCode::Backspace => {
+                let res = self.file_manager.dispatch(Action::GoToParent);
+                if res.is_err() {
+                    eprintln!("Error: {}", res.err().unwrap());
+                }
+                else {
+                    self.list_state.select(Some(0));
+                }
+            },
+            _ => {}
+        }
+        Ok(())
     }
 }
 
@@ -88,7 +136,7 @@ impl Widget for &mut App {
                                         .split(files_layout[0]);
 
         // path Block on the top left hand side
-        let path = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string()).centered()).block(Block::bordered().title(Line::from(" Path ").centered())).render(title_layout[0], buf);
+        let _path = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string()).centered()).block(Block::bordered().title(Line::from(" Path ").centered())).render(title_layout[0], buf);
 
         // header row in the file section under the padding
         let name_category = expand_or_truncate(center("Name".to_string(), file::MAX_NAME_WIDTH), file::MAX_NAME_WIDTH);
@@ -100,7 +148,7 @@ impl Widget for &mut App {
         let modified_category = expand_or_truncate(center("Modified".to_string(), file::MAX_MODIFIED_WIDTH), file::MAX_MODIFIED_WIDTH);
         assert!(modified_category.len() == file::MAX_MODIFIED_WIDTH);
 
-        let header_row = Line::from(format!("    {}{}{}{}", name_category, size_category, type_category, modified_category)).render(inside_file_layout[0], buf);
+        let _header_row = Line::from(format!("    {}{}{}{}", name_category, size_category, type_category, modified_category)).render(inside_file_layout[0], buf);
 
         // files Block on the left hand side
         let files = Block::bordered();
@@ -121,7 +169,7 @@ impl Widget for &mut App {
         StatefulWidget::render(list, items_layout[1], buf, &mut self.list_state);
         
         // file information Block on the right hand side
-        let file_info = Block::bordered().title(Line::from(" File Info ").centered()).render(files_layout[1], buf);
+        let _file_info = Block::bordered().title(Line::from(" File Info ").centered()).render(files_layout[1], buf);
     }
 }
 
