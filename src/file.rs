@@ -6,11 +6,29 @@ use std::path::PathBuf;
 use std::fs;
 use std::fmt;
 use chrono::{DateTime, Local};
+use ratatui::text::Line;
+use crate::utility::string::expand_or_truncate;
+
+pub static MAX_NAME_WIDTH: usize = 17;
+pub static MAX_SIZE_WIDTH: usize = 6;
+pub static MAX_TYPE_WIDTH: usize = 8;
+pub static MAX_MODIFIED_WIDTH: usize = 19;
+
 #[derive(Debug, Clone)]
 pub struct File {
     pub name: String,
     pub file_type: FileType,
     pub metadata: Metadata,
+}
+
+impl File {
+    pub fn to_line(&self) -> Line<'_> {
+        let name = expand_or_truncate(self.name.clone(), MAX_NAME_WIDTH);
+        let size = expand_or_truncate(self.metadata.size_to_string(), MAX_SIZE_WIDTH);
+        let type_string = expand_or_truncate(self.file_type.to_string(), MAX_TYPE_WIDTH);
+        let modified = expand_or_truncate(self.metadata.modified_time_to_string(), MAX_MODIFIED_WIDTH);
+        Line::from(format!("{}{}{}{}", name, size, type_string, modified))
+    }
 }
 
 impl TryFrom<DirEntry> for File {

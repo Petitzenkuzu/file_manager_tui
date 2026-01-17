@@ -9,6 +9,8 @@ use std::time::Duration;
 use ratatui::layout::{Layout, Direction, Constraint};
 use std::path::PathBuf;
 use ratatui::widgets::ListState;
+use crate::file;
+use crate::utility::string::{expand_or_truncate, center};
 pub struct App {
     pub file_manager: FileManager,
     list_state: ListState,
@@ -21,10 +23,10 @@ impl App {
         Self { file_manager, list_state: state }
     }
 
-    pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
+    pub fn run(mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
         loop {
             terminal.draw(|frame| {
-                frame.render_widget(&mut *self, frame.area());
+                frame.render_widget(&mut self, frame.area());
             })?;
             match crossterm::event::read()? {
                 Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) => {
@@ -37,6 +39,9 @@ impl App {
                     if code == KeyCode::Down {
                         self.list_state.scroll_down_by(1);
                     }
+                    if code == KeyCode::Enter {
+                        self.file_manager.enter(self.list_state.selected().unwrap_or(0))?;
+                    }
                 },
                 _ => {}
             }
@@ -47,6 +52,7 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // split the screen into 2 parts vertically top (Title) and bottom (Files/informations)
         let layout = Layout::default()
                                     .direction(Direction::Vertical)
                                     .constraints(vec![
@@ -54,6 +60,8 @@ impl Widget for &mut App {
                                         Constraint::Percentage(100),
                                     ])
                                     .split(area);
+
+        // split the top part into 2 parts horizontally left (Path) and right (nothing for the moment)
         let title_layout = Layout::default()
                                         .direction(Direction::Horizontal)
                                         .constraints(vec![
@@ -61,6 +69,7 @@ impl Widget for &mut App {
                                             Constraint::Percentage(40),
                                         ])
                                         .split(layout[0]);
+        // split the bottom part into 2 parts horizontally left (Files) and right (File informations)
         let files_layout = Layout::default()
                                         .direction(Direction::Horizontal)
                                         .constraints(vec![
@@ -69,21 +78,32 @@ impl Widget for &mut App {
                                         ])
                                         .split(layout[1]);
         
+        // split the left part into 3 parts vertically top (padding), middle (categories) and bottom (Files)
         let inside_file_layout = Layout::default()
                                         .direction(Direction::Vertical)
                                         .constraints(vec![
-                                            Constraint::Length(1),
                                             Constraint::Length(1),
                                             Constraint::Percentage(100),
                                         ])
                                         .split(files_layout[0]);
 
-        // path Block
+        // path Block on the top left hand side
         let path = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string()).centered()).block(Block::bordered().title(Line::from(" Path ").centered())).render(title_layout[0], buf);
 
-        let header_row = Paragraph::new(Text::from(" Name | Size | Modified | Type ")).render(inside_file_layout[1], buf);
+        // header row in the file section under the padding
+        let name_category = expand_or_truncate(center("Name".to_string(), file::MAX_NAME_WIDTH), file::MAX_NAME_WIDTH);
+        assert!(name_category.len() == file::MAX_NAME_WIDTH);
+        let size_category = expand_or_truncate(center("Size".to_string(), file::MAX_SIZE_WIDTH), file::MAX_SIZE_WIDTH);
+        assert!(size_category.len() == file::MAX_SIZE_WIDTH);
+        let type_category = expand_or_truncate(center("Type".to_string(), file::MAX_TYPE_WIDTH), file::MAX_TYPE_WIDTH);
+        assert!(type_category.len() == file::MAX_TYPE_WIDTH);
+        let modified_category = expand_or_truncate(center("Modified".to_string(), file::MAX_MODIFIED_WIDTH), file::MAX_MODIFIED_WIDTH);
+        assert!(modified_category.len() == file::MAX_MODIFIED_WIDTH);
 
-        let files = Block::bordered().title(Line::from(" Files ").centered()).render(files_layout[0], buf);
+        let header_row = Line::from(format!("    {}{}{}{}", name_category, size_category, type_category, modified_category)).render(inside_file_layout[0], buf);
+
+        // files Block on the left hand side
+        let files = Block::bordered();
 
         let items_layout = Layout::default()
                                         .direction(Direction::Horizontal)
@@ -91,13 +111,13 @@ impl Widget for &mut App {
                                             Constraint::Length(1),
                                             Constraint::Percentage(100),
                                         ])
-                                        .split(inside_file_layout[2]);
+                                        .split(inside_file_layout[1]);
 
         let items = self.file_manager.files().iter().map(|file| {
-            Line::from(format!("{} {} ", file.name, file.file_type))
+            file.to_line()
         }).collect::<Vec<Line>>();
         
-        let list = List::new(items).highlight_symbol(">").repeat_highlight_symbol(true);
+        let list = List::new(items).highlight_symbol("->").repeat_highlight_symbol(true).block(files);
         StatefulWidget::render(list, items_layout[1], buf, &mut self.list_state);
         
         // file information Block on the right hand side
