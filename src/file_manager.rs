@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::io::{Read, Write};
 use std::fs;
 use crate::file::FileType;
 use crate::file::File;
@@ -38,7 +37,8 @@ impl FileManager {
     }
 
     pub fn open_file(&mut self, file: File) -> std::io::Result<()> {
-        todo!()
+        std::process::Command::new("cmd").arg("/c").arg("start").arg("cmd").arg("echo").arg(file.name.clone()).spawn()?;
+        Ok(())
     }
 
     pub fn open_link(&mut self, file: File) -> std::io::Result<()> {
@@ -57,6 +57,7 @@ impl FileManager {
                     path.pop();
                     self.path = path;
                     self.files = fs::read_dir(&self.path)?.filter_map(|entry| File::try_from(entry.ok()?).ok()).collect::<Vec<File>>();
+
                 }
             },
             _ => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid file type")),
@@ -64,7 +65,7 @@ impl FileManager {
         Ok(())
     }
 
-    pub fn enter(&mut self, index: usize) -> std::io::Result<()> {
+    pub fn open(&mut self, index: usize) -> std::io::Result<()> {
         match &self.files[index].file_type {
             FileType::Folder => self.open_folder(self.files[index].clone())?,
             FileType::File => self.open_file(self.files[index].clone())?,
@@ -73,4 +74,17 @@ impl FileManager {
         }
         Ok(())
     }
+
+    pub fn dispatch(&mut self, action: Action) -> std::io::Result<()> {
+        match action {
+            Action::Open(index) => self.open(index),
+            Action::GoToParent => self.go_to_parent(),
+        }
+    }
+
+}
+
+pub enum Action {
+    Open(usize),
+    GoToParent,
 }
