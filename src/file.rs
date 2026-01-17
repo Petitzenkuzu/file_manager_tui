@@ -5,6 +5,7 @@ use std::fs::Metadata as StdMetadata;
 use std::path::PathBuf;
 use std::fs;
 use std::fmt;
+use chrono::{DateTime, Local};
 #[derive(Debug, Clone)]
 pub struct File {
     pub name: String,
@@ -29,6 +30,61 @@ pub struct Metadata {
     modified_time: SystemTime,
     access_time: SystemTime,
     creation_time: SystemTime,
+    size: Size,
+}
+
+impl Metadata {
+    pub fn modified_time_to_string(&self) -> String {
+        let datetime : DateTime<Local> = DateTime::from(self.modified_time);
+        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+    pub fn access_time_to_string(&self) -> String {
+        let datetime : DateTime<Local> = DateTime::from(self.access_time);
+        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+    pub fn creation_time(&self) -> String {
+        let datetime : DateTime<Local> = DateTime::from(self.creation_time);
+        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+    pub fn size_to_string(&self) -> String {
+        self.size.to_string()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Size {
+    Bytes(u64),
+    KB(u64),
+    MB(u64),
+    GB(u64),
+}
+
+impl From<u64> for Size {
+    fn from(size: u64) -> Self {
+        if size < 1024 {
+            Size::Bytes(size)
+        }
+        else if size < 1024 * 1024 {
+            Size::KB(size / 1024)
+        }
+        else if size < 1024 * 1024 * 1024 {
+            Size::MB(size / 1024 / 1024)
+        }
+        else {
+            Size::GB(size / 1024 / 1024 / 1024)
+        }
+    }
+}
+
+impl ToString for Size{
+    fn to_string(&self) -> String{
+        match self {
+            Size::Bytes(size) => format!("{}B", size),
+            Size::KB(size) => format!("{}KB", size),
+            Size::MB(size) => format!("{} MB", size),
+            Size::GB(size) => format!("{} GB", size),
+        }
+    }
 }
 
 impl TryFrom<StdMetadata> for Metadata {
@@ -38,6 +94,7 @@ impl TryFrom<StdMetadata> for Metadata {
             modified_time: metadata.modified()?,
             access_time: metadata.accessed()?,
             creation_time: metadata.created()?,
+            size: metadata.len().into(),
         })
     }
 }
