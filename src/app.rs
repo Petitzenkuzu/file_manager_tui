@@ -56,7 +56,7 @@ impl App {
         }
     }
 
-    pub fn dispatch(&mut self, code: KeyCode) -> io::Result<()> {
+    fn dispatch(&mut self, code: KeyCode) -> io::Result<()> {
         match code {
             KeyCode::Up => {
                 let selected = match self.list_state.selected() {
@@ -92,7 +92,7 @@ impl App {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
                 else {
-                    self.list_state.select(Some(0));
+                    self.list_state.select(self.min_selected());
                 }
             },
             KeyCode::Backspace => {
@@ -101,12 +101,32 @@ impl App {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
                 else {
-                    self.list_state.select(Some(0));
+                    self.list_state.select(self.min_selected());
+                }
+            },
+            KeyCode::Char('r') => {
+                let res = self.file_manager.dispatch(Action::Reload);
+                if res.is_err() {
+                    eprintln!("Error: {}", res.err().unwrap());
+                }
+                else {
+                    self.list_state.select(self.min_selected());
                 }
             },
             _ => {}
         }
         Ok(())
+    }
+
+    /**
+    * @brief Returns the minimum selected index, if the list is empty, returns None
+    * Returns the minimum selected index, if the list is empty, returns None
+    */
+    fn min_selected(&self) -> Option<usize> {
+        match self.file_manager.files().len() {
+            0 => None,
+            _ => Some(0),
+        }
     }
 }
 

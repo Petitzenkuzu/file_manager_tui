@@ -42,7 +42,7 @@ impl FileManager {
     }
 
     fn open_folder(&mut self, file: File) -> std::io::Result<()> {
-        self.path.push(file.name.clone());
+        self.path.push(&file.name);
         self.reload_files()?;
         Ok(())
     }
@@ -77,7 +77,7 @@ impl FileManager {
     }
 
     fn open(&mut self, index: usize) -> std::io::Result<()> {
-        match &self.files[index].file_type {
+        match self.files[index].file_type {
             FileType::Folder => self.open_folder(self.files[index].clone())?,
             FileType::File => self.open_file(self.files[index].clone())?,
             FileType::Link { .. } => self.open_link(self.files[index].clone())?,
