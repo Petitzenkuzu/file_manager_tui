@@ -10,11 +10,6 @@ use ratatui::text::Line;
 use crate::utility::string::expand_or_truncate;
 use crate::utility::float::truncate;
 
-pub static MAX_NAME_WIDTH: usize = 30;
-pub static MAX_SIZE_WIDTH: usize = 10;
-pub static MAX_TYPE_WIDTH: usize = 13;
-pub static MAX_MODIFIED_WIDTH: usize = 19;
-
 #[derive(Debug, Clone)]
 pub struct File {
     pub name: String,
@@ -23,11 +18,11 @@ pub struct File {
 }
 
 impl File {
-    pub fn to_line(&self) -> Line<'_> {
-        let name = expand_or_truncate(self.name.clone(), MAX_NAME_WIDTH);
-        let size = expand_or_truncate(self.metadata.size_to_string(), MAX_SIZE_WIDTH);
-        let type_string = expand_or_truncate(self.file_type.to_string(), MAX_TYPE_WIDTH);
-        let modified = expand_or_truncate(self.metadata.modified_time_to_string(), MAX_MODIFIED_WIDTH);
+    pub fn to_line(&self, max_name_width: usize, max_size_width: usize, max_type_width: usize, max_modified_width: usize) -> Line<'_> {
+        let name = expand_or_truncate(self.name.clone(), max_name_width);
+        let size = expand_or_truncate(self.metadata.size_to_string(), max_size_width);
+        let type_string = expand_or_truncate(self.file_type.to_string(), max_type_width);
+        let modified = expand_or_truncate(self.metadata.modified_time_to_string(), max_modified_width);
         Line::from(format!("{}{}{}{}", name, size, type_string, modified))
     }
 }
@@ -84,27 +79,28 @@ impl From<u64> for Size {
             Size::Bytes(size as u16)
         }
         else if size < 1024 * 1024 {
-            Size::KB(truncate((size as f32) / 1024.0, 2))
+            Size::KB((size as f32) / 1024.0)
         }
         else if size < 1024 * 1024 * 1024 {
-            Size::MB(truncate((size as f32) / 1024.0 / 1024.0, 2))
+            Size::MB((size as f32) / 1024.0 / 1024.0)
         }
         else {
-            Size::GB(truncate((size as f32) / 1024.0 / 1024.0 / 1024.0, 2))
+            Size::GB((size as f32) / 1024.0 / 1024.0 / 1024.0)
         }
     }
 }
 
-impl ToString for Size{
-    fn to_string(&self) -> String{
+impl fmt::Display for Size{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Size::Bytes(size) => format!("{}B", size),
-            Size::KB(size) => format!("{}KB", size),
-            Size::MB(size) => format!("{}MB", size),
-            Size::GB(size) => format!("{}GB", size),
+            Size::Bytes(size) => write!(f, "{}B", size),
+            Size::KB(size) => write!(f, "{:.2}KB", size),
+            Size::MB(size) => write!(f, "{:.2}MB", size),
+            Size::GB(size) => write!(f, "{:.2}GB", size),
         }
     }
 }
+
 
 impl TryFrom<StdMetadata> for Metadata {
     type Error = std::io::Error;
