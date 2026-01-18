@@ -12,16 +12,29 @@ use ratatui::widgets::ListState;
 use crate::file;
 use crate::utility::string::{expand_or_truncate, center};
 use crate::file_manager::Action;
+use std::cmp::max;
+
+// Min char size width for the name column
+pub static MIN_NAME_WIDTH: usize = 12;
+// Max char size width for the size column
+pub static MAX_SIZE_WIDTH: usize = 10;
+// Max char size width for the type column
+pub static MAX_TYPE_WIDTH: usize = 13;
+// Max char size width for the modified column
+pub static MAX_MODIFIED_WIDTH: usize = 20;
+
+
 pub struct App {
     pub file_manager: FileManager,
     list_state: ListState,
+    max_name_width: usize,
 }
 
 impl App {
     pub fn new(file_manager: FileManager) -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
-        Self { file_manager, list_state: state }
+        Self { file_manager, list_state: state, max_name_width: MIN_NAME_WIDTH }
     }
 
     pub fn run(mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
@@ -138,15 +151,13 @@ impl Widget for &mut App {
         // path Block on the top left hand side
         let _path = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string()).centered()).block(Block::bordered().title(Line::from(" Path ").centered())).render(title_layout[0], buf);
 
+        self.max_name_width = max(MIN_NAME_WIDTH, (files_layout[0].width as usize).saturating_sub(5+MAX_TYPE_WIDTH+MAX_MODIFIED_WIDTH+MAX_SIZE_WIDTH));
+
         // header row in the file section under the padding
-        let name_category = expand_or_truncate(center("Name".to_string(), file::MAX_NAME_WIDTH), file::MAX_NAME_WIDTH);
-        assert!(name_category.len() == file::MAX_NAME_WIDTH);
-        let size_category = expand_or_truncate(center("Size".to_string(), file::MAX_SIZE_WIDTH), file::MAX_SIZE_WIDTH);
-        assert!(size_category.len() == file::MAX_SIZE_WIDTH);
-        let type_category = expand_or_truncate(center("Type".to_string(), file::MAX_TYPE_WIDTH), file::MAX_TYPE_WIDTH);
-        assert!(type_category.len() == file::MAX_TYPE_WIDTH);
-        let modified_category = expand_or_truncate(center("Modified".to_string(), file::MAX_MODIFIED_WIDTH), file::MAX_MODIFIED_WIDTH);
-        assert!(modified_category.len() == file::MAX_MODIFIED_WIDTH);
+        let name_category = expand_or_truncate(center("Name".to_string(), self.max_name_width), self.max_name_width);
+        let size_category = expand_or_truncate(center("Size".to_string(), MAX_SIZE_WIDTH), MAX_SIZE_WIDTH);
+        let type_category = expand_or_truncate(center("Type".to_string(), MAX_TYPE_WIDTH), MAX_TYPE_WIDTH);
+        let modified_category = expand_or_truncate(center("Modified".to_string(), MAX_MODIFIED_WIDTH), MAX_MODIFIED_WIDTH);
 
         let _header_row = Line::from(format!("    {}{}{}{}", name_category, size_category, type_category, modified_category)).render(inside_file_layout[0], buf);
 
@@ -162,7 +173,7 @@ impl Widget for &mut App {
                                         .split(inside_file_layout[1]);
 
         let items = self.file_manager.files().iter().map(|file| {
-            file.to_line()
+            file.to_line(self.max_name_width, MAX_SIZE_WIDTH, MAX_TYPE_WIDTH, MAX_MODIFIED_WIDTH)
         }).collect::<Vec<Line>>();
         
         let list = List::new(items).highlight_symbol("->").repeat_highlight_symbol(true).block(files);
