@@ -2,19 +2,18 @@ pub mod string {
 
     pub fn expand_or_truncate(mut string: String, max_width: usize) -> String {
         if string.chars().count() > max_width {
-            string.truncate(max_width-4);
+            string.truncate(max_width.saturating_sub(4));
             string.push_str("...");
-            string = format!("{}{}", string, " ".repeat(max_width-string.chars().count()));
+            string = format!("{}{}", string, " ".repeat(max_width.saturating_sub(string.chars().count())));
         }
         else {
-            string = format!("{}{}", string, " ".repeat(max_width - string.chars().count()));
+            string = format!("{}{}", string, " ".repeat(max_width.saturating_sub(string.chars().count())));
         }
         string
     }
     
     pub fn center(text: String, max_width: usize) -> String {
-        assert!(max_width >= text.len(), "Max width must be greater than or equal to the text length");
-        let padding = " ".repeat((max_width - text.len())/2);
+        let padding = " ".repeat((max_width.saturating_sub(text.chars().count()))/2);
         format!("{}{}{}", padding, text, padding)
     }
 
