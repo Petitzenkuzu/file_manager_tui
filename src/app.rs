@@ -1,46 +1,53 @@
 use crate::file_manager::FileManager;
 use ratatui::{
-    DefaultTerminal, Frame, buffer::Buffer, layout::Rect, style::Stylize, symbols::border, text::{Line, Text}, widgets::{Block, List, Padding, Paragraph, StatefulWidget, Widget}
+    buffer::Buffer, layout::Rect, text::{Line, Text}, widgets::{Block, List, Padding, Paragraph, StatefulWidget, Widget}
 };
-use ratatui::style::{Style, Color};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{ Event, KeyCode, KeyEvent, KeyEventKind};
 use std::io;
-use std::time::Duration;
 use ratatui::layout::{Layout, Direction, Constraint};
-use std::path::PathBuf;
 use ratatui::widgets::ListState;
-use crate::file;
-use crate::utility::string::{expand_or_truncate, center};
-use crate::file_manager::Action;
-use std::cmp::max;
+use crate::file_manager::FileManagerAction;
+use crate::popup::Popup;
+use crate::file_manager::FileType;
 
 // Min char size width for the name column
 pub static MIN_NAME_WIDTH: usize = 12;
 // Max char size width for the size column
-pub static MAX_SIZE_WIDTH: usize = 10;
+pub static _MAX_SIZE_WIDTH: usize = 10;
 // Max char size width for the type column
-pub static MAX_TYPE_WIDTH: usize = 13;
+pub static _MAX_TYPE_WIDTH: usize = 13;
 // Max char size width for the modified column
-pub static MAX_MODIFIED_WIDTH: usize = 20;
+pub static MODIFIED_TIME_WIDTH: usize = 20;
 
 
 pub struct App {
     pub file_manager: FileManager,
     list_state: ListState,
+    error_message: Option<String>,
+    focus: FocusScreen,
+    popup: Popup,
+    input_buffer: String,
     max_name_width: usize,
 }
+
+enum FocusScreen {
+    Files,
+    Path,
+}
+
 
 impl App {
     pub fn new(file_manager: FileManager) -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
-        Self { file_manager, list_state: state, max_name_width: MIN_NAME_WIDTH }
+        Self { file_manager, list_state: state, error_message: None, focus: FocusScreen::Files, popup: Popup::None, input_buffer: String::new(), max_name_width: MIN_NAME_WIDTH }
     }
 
     pub fn run(mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
         loop {
             terminal.draw(|frame| {
                 frame.render_widget(&mut self, frame.area());
+                frame.render_widget(&mut self.popup, frame.area());
             })?;
             match crossterm::event::read()? {
                 Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) => {
@@ -87,7 +94,7 @@ impl App {
                     Some(selected) => selected,
                     None => return Ok(()),
                 };
-                let res = self.file_manager.dispatch(Action::Open(self.list_state.selected().unwrap_or(0)));
+                let res = self.file_manager.dispatch(FileManagerAction::Open(self.list_state.selected().unwrap_or(0)));
                 if res.is_err() {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
@@ -96,7 +103,7 @@ impl App {
                 }
             },
             KeyCode::Backspace => {
-                let res = self.file_manager.dispatch(Action::GoToParent);
+                let res = self.file_manager.dispatch(FileManagerAction::GoToParent);
                 if res.is_err() {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
@@ -104,14 +111,17 @@ impl App {
                     self.list_state.select(self.min_selected());
                 }
             },
-            KeyCode::Char('r') => {
-                let res = self.file_manager.dispatch(Action::Reload);
+            KeyCode::F(5) => {
+                let res = self.file_manager.dispatch(FileManagerAction::Reload);
                 if res.is_err() {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
                 else {
                     self.list_state.select(self.min_selected());
                 }
+            },
+            KeyCode::Char('c') => {
+                self.popup = Popup::Create{file_type: FileType::Folder, name: String::new()};
             },
             _ => {}
         }
@@ -133,74 +143,37 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // split the screen into 2 parts vertically top (Title) and bottom (Files/informations)
-        let layout = Layout::default()
-                                    .direction(Direction::Vertical)
-                                    .constraints(vec![
-                                        Constraint::Length(3),
-                                        Constraint::Percentage(100),
-                                    ])
-                                    .split(area);
+        // split the screen into 2 parts horizontally left (Files) and right (File preview if available on selected file)
+        let main_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ])
+            .split(area);
 
-        // split the top part into 2 parts horizontally left (Path) and right (nothing for the moment)
-        let title_layout = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints(vec![
-                                            Constraint::Percentage(60),
-                                            Constraint::Percentage(40),
-                                        ])
-                                        .split(layout[0]);
-        // split the bottom part into 2 parts horizontally left (Files) and right (File informations)
+        let list_symbol = "->";
+        // dynamically calculate the max name width based on the screen width and the modified time width
+        self.max_name_width = std::cmp::max(crate::app::MIN_NAME_WIDTH, (main_layout[0].width as usize).saturating_sub(MODIFIED_TIME_WIDTH+list_symbol.len()));
+
+        // split the left part into 2 parts vertically top (Path) and bottom (File list)
         let files_layout = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints(vec![
-                                            Constraint::Percentage(70),
-                                            Constraint::Percentage(30),
-                                        ])
-                                        .split(layout[1]);
-        
-        // split the left part into 3 parts vertically top (padding), middle (categories) and bottom (Files)
-        let inside_file_layout = Layout::default()
-                                        .direction(Direction::Vertical)
-                                        .constraints(vec![
-                                            Constraint::Length(1),
-                                            Constraint::Percentage(100),
-                                        ])
-                                        .split(files_layout[0]);
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Length(3),
+                Constraint::Percentage(100),
+            ])
+            .split(main_layout[0]);
 
-        // path Block on the top left hand side
-        let _path = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string()).centered()).block(Block::bordered().title(Line::from(" Path ").centered())).render(title_layout[0], buf);
+        // render the file list
+        let list = List::new(self.file_manager.files().iter().map(|file| file.to_line(self.max_name_width-list_symbol.len(), MODIFIED_TIME_WIDTH)).collect::<Vec<Line>>()).block(Block::default()).highlight_symbol("->").repeat_highlight_symbol(true);
+        StatefulWidget::render(list, files_layout[1], buf, &mut self.list_state);
 
-        self.max_name_width = max(MIN_NAME_WIDTH, (files_layout[0].width as usize).saturating_sub(5+MAX_TYPE_WIDTH+MAX_MODIFIED_WIDTH+MAX_SIZE_WIDTH));
+        // render the path
+        let _path_display = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string())).block(Block::default().padding(Padding::new(1, 0, 1, 0))).left_aligned().render(files_layout[0], buf);
 
-        // header row in the file section under the padding
-        let name_category = expand_or_truncate(center("Name".to_string(), self.max_name_width), self.max_name_width);
-        let size_category = expand_or_truncate(center("Size".to_string(), MAX_SIZE_WIDTH), MAX_SIZE_WIDTH);
-        let type_category = expand_or_truncate(center("Type".to_string(), MAX_TYPE_WIDTH), MAX_TYPE_WIDTH);
-        let modified_category = expand_or_truncate(center("Modified".to_string(), MAX_MODIFIED_WIDTH), MAX_MODIFIED_WIDTH);
-
-        let _header_row = Line::from(format!("    {}{}{}{}", name_category, size_category, type_category, modified_category)).render(inside_file_layout[0], buf);
-
-        // files Block on the left hand side
-        let files = Block::bordered();
-
-        let items_layout = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints(vec![
-                                            Constraint::Length(1),
-                                            Constraint::Percentage(100),
-                                        ])
-                                        .split(inside_file_layout[1]);
-
-        let items = self.file_manager.files().iter().map(|file| {
-            file.to_line(self.max_name_width, MAX_SIZE_WIDTH, MAX_TYPE_WIDTH, MAX_MODIFIED_WIDTH)
-        }).collect::<Vec<Line>>();
-        
-        let list = List::new(items).highlight_symbol("->").repeat_highlight_symbol(true).block(files);
-        StatefulWidget::render(list, items_layout[1], buf, &mut self.list_state);
-        
-        // file information Block on the right hand side
-        let _file_info = Block::bordered().title(Line::from(" File Info ").centered()).render(files_layout[1], buf);
+        let _preview_display = Paragraph::new(Text::from("")).block(Block::default().title(Line::from(" Preview ").centered())).render(main_layout[1], buf);
+    
     }
 }
 

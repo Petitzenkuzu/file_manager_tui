@@ -1,53 +1,42 @@
 use std::time::SystemTime;
 use std::fs::DirEntry;
-use std::fs::FileType as StdFileType;
-use std::fs::Metadata as StdMetadata;
 use std::path::PathBuf;
 use std::fs;
 use std::fmt;
 use chrono::{DateTime, Local};
 use ratatui::text::Line;
 use crate::utility::string::expand_or_truncate;
-use crate::utility::float::truncate;
 
 #[derive(Debug, Clone)]
 pub struct File {
-    pub name: String,
-    pub file_type: FileType,
-    pub metadata: Metadata,
-}
-
-impl File {
-    pub fn to_line(&self, max_name_width: usize, max_size_width: usize, max_type_width: usize, max_modified_width: usize) -> Line<'_> {
-        let name = expand_or_truncate(self.name.clone(), max_name_width);
-        let size = expand_or_truncate(self.metadata.size_to_string(), max_size_width);
-        let type_string = expand_or_truncate(self.file_type.to_string(), max_type_width);
-        let modified = expand_or_truncate(self.metadata.modified_time_to_string(), max_modified_width);
-        Line::from(format!("{}{}{}{}", name, size, type_string, modified))
-    }
-}
-
-impl TryFrom<DirEntry> for File {
-    type Error = std::io::Error;
-    fn try_from(entry: DirEntry) -> Result<Self, Self::Error> {
-
-        Ok(Self {
-            name: entry.file_name().to_string_lossy().to_string(),
-            file_type: FileType::try_from(&entry)?,
-            metadata: Metadata::try_from(entry.metadata()?)?,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Metadata {
+    name: String,
+    file_type: FileType,
     modified_time: SystemTime,
     access_time: SystemTime,
     creation_time: SystemTime,
     size: Size,
 }
 
-impl Metadata {
+impl File {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+    pub fn file_type(&self) -> &FileType {
+        &self.file_type
+    }
+    pub fn modified_time(&self) -> &SystemTime {
+        &self.modified_time
+    }
+    pub fn access_time(&self) -> &SystemTime {
+        &self.access_time
+    }
+    pub fn creation_time(&self) -> &SystemTime {
+        &self.creation_time
+    }
+    pub fn size(&self) -> &Size {
+        &self.size
+    }
+
     pub fn modified_time_to_string(&self) -> String {
         let datetime : DateTime<Local> = DateTime::from(self.modified_time);
         datetime.format("%Y-%m-%d %H:%M:%S").to_string()
@@ -56,14 +45,39 @@ impl Metadata {
         let datetime : DateTime<Local> = DateTime::from(self.access_time);
         datetime.format("%Y-%m-%d %H:%M:%S").to_string()
     }
-    pub fn creation_time(&self) -> String {
+    pub fn creation_time_to_string(&self) -> String {
         let datetime : DateTime<Local> = DateTime::from(self.creation_time);
         datetime.format("%Y-%m-%d %H:%M:%S").to_string()
     }
     pub fn size_to_string(&self) -> String {
         self.size.to_string()
     }
+
+    pub fn to_line(&self, max_name_width: usize, max_modified_width: usize) -> Line<'_> {
+        let name = expand_or_truncate(self.name.clone(), max_name_width);
+        let modified = expand_or_truncate(self.modified_time_to_string(), max_modified_width);
+        Line::from(format!("{}{}", name, modified))
+    }
 }
+
+impl TryFrom<DirEntry> for File {
+    type Error = std::io::Error;
+    fn try_from(entry: DirEntry) -> Result<Self, Self::Error> {
+        let metadata = entry.metadata()?;
+
+        Ok(Self {
+            name: entry.file_name().to_string_lossy().to_string(),
+            file_type: FileType::try_from(&entry)?,
+            modified_time: metadata.modified()?,
+            access_time: metadata.accessed()?,
+            creation_time: metadata.created()?,
+            size: metadata.len().into(),
+        })
+    }
+}
+
+
+
 
 #[derive(Debug, Copy, Clone)]
 pub enum Size {
@@ -102,17 +116,7 @@ impl fmt::Display for Size{
 }
 
 
-impl TryFrom<StdMetadata> for Metadata {
-    type Error = std::io::Error;
-    fn try_from(metadata: StdMetadata) -> Result<Self, Self::Error> {
-        Ok(Self {
-            modified_time: metadata.modified()?,
-            access_time: metadata.accessed()?,
-            creation_time: metadata.created()?,
-            size: metadata.len().into(),
-        })
-    }
-}
+
 
 #[derive(Debug, Clone)]
 pub enum FileType {
