@@ -2,7 +2,7 @@ pub mod string {
 
     pub fn expand_or_truncate(mut string: String, max_width: usize) -> String {
         if string.chars().count() > max_width {
-            string.truncate(max_width.saturating_sub(4));
+            string = string.chars().take(max_width.saturating_sub(4)).collect();
             string.push_str("...");
             string = format!("{}{}", string, " ".repeat(max_width.saturating_sub(string.chars().count())));
         }
