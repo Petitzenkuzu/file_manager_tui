@@ -11,13 +11,15 @@ use crate::popup::Popup;
 use crate::file_manager::FileType;
 
 // Min char size width for the name column
-pub static MIN_NAME_WIDTH: usize = 12;
+pub static MIN_NAME_WIDTH: usize = 20;
 // Max char size width for the size column
 pub static _MAX_SIZE_WIDTH: usize = 10;
 // Max char size width for the type column
 pub static _MAX_TYPE_WIDTH: usize = 13;
 // Max char size width for the modified column
 pub static MODIFIED_TIME_WIDTH: usize = 20;
+// Min files section width on the UI
+pub static MIN_FILES_SECTION_WIDTH: u16 = 50;
 
 
 pub struct App {
@@ -143,12 +145,16 @@ impl App {
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+
+        // we shrink preview section to let space for files section if the terminal is too small
+        let area_width = area.width;
+        let files_section_width_constrain = if area_width / 2 > MIN_FILES_SECTION_WIDTH { Constraint::Percentage(50) } else { Constraint::Length(MIN_FILES_SECTION_WIDTH) };
         // split the screen into 2 parts horizontally left (Files) and right (File preview if available on selected file)
         let main_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
+                files_section_width_constrain,
+                Constraint::Percentage(100),
             ])
             .split(area);
 
