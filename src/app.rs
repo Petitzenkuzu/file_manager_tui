@@ -1,4 +1,5 @@
-use crate::file_manager::FileManager;
+use crate::file_manager::{FileManager, FileManagerAction, FileType};
+use crate::workers::{LightWorkerResponse, LightWorkerError, LightWorkerMessage, FsLightWorker};
 use ratatui::{
     buffer::Buffer, layout::Rect, text::{Line, Text}, widgets::{Block, List, Padding, Paragraph, StatefulWidget, Widget}
 };
@@ -6,9 +7,10 @@ use crossterm::event::{ Event, KeyCode, KeyEvent, KeyEventKind};
 use std::io;
 use ratatui::layout::{Layout, Direction, Constraint};
 use ratatui::widgets::ListState;
-use crate::file_manager::FileManagerAction;
 use crate::popup::Popup;
-use crate::file_manager::FileType;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 // Min char size width for the name column
 pub static MIN_NAME_WIDTH: usize = 20;
@@ -23,13 +25,12 @@ pub static MIN_FILES_SECTION_WIDTH: u16 = 50;
 
 
 pub struct App {
-    pub file_manager: FileManager,
+    file_manager: FileManager,
     list_state: ListState,
-    error_message: Option<String>,
     focus: FocusScreen,
     popup: Popup,
-    input_buffer: String,
     max_name_width: usize,
+    light_receiver: mpsc::Receiver<Result<LightWorkerResponse, LightWorkerError>>,
 }
 
 enum FocusScreen {
@@ -39,28 +40,69 @@ enum FocusScreen {
 
 
 impl App {
-    pub fn new(file_manager: FileManager) -> Self {
+    pub fn new(file_manager: FileManager, light_receiver: mpsc::Receiver<Result<LightWorkerResponse, LightWorkerError>>) -> Self {
+
         let mut state = ListState::default();
-        state.select(Some(0));
-        Self { file_manager, list_state: state, error_message: None, focus: FocusScreen::Files, popup: Popup::None, input_buffer: String::new(), max_name_width: MIN_NAME_WIDTH }
+        state.select(None);
+        Self { 
+            file_manager, 
+            light_receiver,
+            list_state: state, 
+            focus: FocusScreen::Files, 
+            popup: Popup::None, 
+            max_name_width: MIN_NAME_WIDTH }
+    }
+
+    pub fn spawn_light_worker(&mut self, sender: Option<mpsc::Sender<Result<LightWorkerResponse, LightWorkerError>>>, receiver: Option<mpsc::Receiver<LightWorkerMessage>>) {
+        if let (Some(sender), Some(receiver)) = (sender, receiver) {
+            let mut light_worker = FsLightWorker::new(self.file_manager.light_sync_id(), receiver, sender);
+            thread::spawn(move || {
+                let _ = light_worker.run();
+            });
+        }
+        else {
+            let (file_manager_sender, light_worker_receiver) = mpsc::channel();
+            let (light_worker_sender, app_receiver) = mpsc::channel();
+            self.file_manager.set_light_worker_channel(file_manager_sender);
+            self.light_receiver = app_receiver;
+            self.spawn_light_worker(Some(light_worker_sender), Some(light_worker_receiver));
+        }
     }
 
     pub fn run(mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
+        let _ = self.file_manager.dispatch(FileManagerAction::Reload);
         loop {
+
+            // frame rendering
             terminal.draw(|frame| {
                 frame.render_widget(&mut self, frame.area());
                 frame.render_widget(&mut self.popup, frame.area());
             })?;
-            match crossterm::event::read()? {
-                Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) => {
+
+            // input handling
+            if crossterm::event::poll(Duration::from_millis(50))? {
+                if let Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) = crossterm::event::read()? {
                     if code == KeyCode::Char('q') {
+                        self.file_manager.shutdown();
                         break Ok(());
                     }
-                    else {
-                        self.dispatch(code)?;
-                    }
-                },
-                _ => {}
+                    self.dispatch(code)?;
+                }
+            }
+
+            // workers response handling
+            while let Ok(response) = self.light_receiver.try_recv() {
+                match response {
+                    Ok(response) => {
+                        match response {
+                            LightWorkerResponse::Loaded(_, _) => {
+                                self.file_manager.consume_response(response);
+                                self.list_state.select(self.min_selected());
+                            },
+                        }
+                    },
+                    Err(error) => eprintln!("Error: {}", error),
+                }
             }
         }
     }
@@ -96,7 +138,7 @@ impl App {
                     Some(selected) => selected,
                     None => return Ok(()),
                 };
-                let res = self.file_manager.dispatch(FileManagerAction::Open(self.list_state.selected().unwrap_or(0)));
+                let res = self.file_manager.dispatch(FileManagerAction::Open(selected));
                 if res.is_err() {
                     eprintln!("Error: {}", res.err().unwrap());
                 }
