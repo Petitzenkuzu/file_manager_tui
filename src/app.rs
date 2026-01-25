@@ -86,7 +86,7 @@ impl App {
                         self.file_manager.shutdown();
                         break Ok(());
                     }
-                    self.dispatch(code)?;
+                    self.dispatch(code);
                 }
             }
 
@@ -107,9 +107,12 @@ impl App {
         }
     }
 
-    fn dispatch(&mut self, code: KeyCode) -> io::Result<()> {
+    fn dispatch(&mut self, code: KeyCode) {
         match code {
             KeyCode::Up => {
+                if self.file_manager.files().is_empty() {
+                    return;
+                }
                 let selected = match self.list_state.selected() {
                     Some(selected) => selected,
                     None => 0,
@@ -122,6 +125,9 @@ impl App {
                 }
             },
             KeyCode::Down => {
+                if self.file_manager.files().is_empty() {
+                    return;
+                }
                 let selected = match self.list_state.selected() {
                     Some(selected) => selected,
                     None => 0,
@@ -136,7 +142,7 @@ impl App {
             KeyCode::Enter => {
                 let selected = match self.list_state.selected() {
                     Some(selected) => selected,
-                    None => return Ok(()),
+                    None => return,
                 };
                 let res = self.file_manager.dispatch(FileManagerAction::Open(selected));
                 if res.is_err() {
@@ -169,7 +175,6 @@ impl App {
             },
             _ => {}
         }
-        Ok(())
     }
 
     /**

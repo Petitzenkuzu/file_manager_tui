@@ -93,7 +93,7 @@ impl FileManager {
                 if *is_dead {
                     return Err(FileManagerError::OpenFileFailed("Dead Symbolic Link".to_string()));
                 }
-                let path = fs::canonicalize(target).map_err(|e| FileManagerError::OpenFileFailed("Failed to resolve the link".to_string()))?;
+                let path = fs::canonicalize(target).map_err(|_e| FileManagerError::OpenFileFailed("Failed to resolve the link".to_string()))?;
 
                 let metadata = fs::metadata(&path).map_err(|_e| FileManagerError::OpenFileFailed("Failed to resolve targeted file".to_string()))?;
 
@@ -133,13 +133,6 @@ pub enum FileManagerAction {
     GoToParent,
     Reload,
     CreateFolder(String),
-}
-
-pub enum FileManagerResponse {
-    Opened,
-    WentToParent,
-    FolderCreated,
-    Reloaded,
 }
 
 #[derive(Error, Debug)]
