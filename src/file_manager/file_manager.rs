@@ -11,13 +11,14 @@ use crate::workers::LightWorkerResponse;
 pub struct FileManager {
     path: PathBuf,
     files: Vec<File>,
+    selected_file_preview_buffer: String,
     light_sync_id: usize,
     light_worker_channel: mpsc::Sender<LightWorkerMessage>,
 }
 // public methods
 impl FileManager {
     pub fn new(path :&PathBuf, light_sync_id: usize, light_worker_channel: mpsc::Sender<LightWorkerMessage>) -> Self {
-        Self { path: path.clone(), files: Vec::new(), light_sync_id, light_worker_channel }
+        Self { path: path.clone(), files: Vec::new(), selected_file_preview_buffer: String::new(), light_sync_id, light_worker_channel }
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -26,6 +27,10 @@ impl FileManager {
 
     pub fn files(&self) -> &Vec<File> {
         &self.files
+    }
+
+    pub fn selected_file_preview_buffer(&self) -> &str {
+        &self.selected_file_preview_buffer
     }
 
     pub fn light_sync_id(&self) -> usize {
@@ -49,6 +54,7 @@ impl FileManager {
             FileManagerAction::Open(index) => self.open(index),
             FileManagerAction::GoToParent => self.go_to_parent(),
             FileManagerAction::Reload => self.reload_files(),
+            FileManagerAction::ReadContent(index) => self.read_content(index),
             FileManagerAction::CreateFolder(_relative_path) => {
                 todo!();
             },
@@ -60,6 +66,13 @@ impl FileManager {
             LightWorkerResponse::Loaded(files, path) => {
                 self.path = path;
                 self.files = files;
+                self.increment_light_sync_id();
+            },
+            LightWorkerResponse::Read(content, mut path) => {
+                path.pop();
+                if self.path == path {
+                    self.selected_file_preview_buffer = content;
+                }
                 self.increment_light_sync_id();
             },
         }
@@ -122,6 +135,16 @@ impl FileManager {
         Ok(())
     }
 
+    fn read_content(&mut self, index: usize) -> Result<(), FileManagerError> {
+        if !matches!(self.files()[index].file_type(),FileType::File) {
+            self.selected_file_preview_buffer = String::from("No preview available");
+            return Ok(());
+        }
+        let path = self.path.join(self.files()[index].name());
+        self.light_worker_channel.send(LightWorkerMessage::WorkerAction{sync_id: self.light_sync_id, action: LightWorkerAction::Read(path)})?;
+        Ok(())
+    }
+
     fn _create_folder(&mut self, path: PathBuf) -> std::io::Result<()> {
         fs::create_dir_all(&path)?;
         Ok(())
@@ -132,6 +155,7 @@ pub enum FileManagerAction {
     Open(usize),
     GoToParent,
     Reload,
+    ReadContent(usize),
     CreateFolder(String),
 }
 

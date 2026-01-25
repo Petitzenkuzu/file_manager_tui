@@ -3,7 +3,7 @@ use crate::workers::{LightWorkerResponse, LightWorkerError, LightWorkerMessage, 
 use ratatui::{
     buffer::Buffer, layout::Rect, text::{Line, Text}, widgets::{Block, List, Padding, Paragraph, StatefulWidget, Widget}
 };
-use crossterm::event::{ Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{ Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::io;
 use ratatui::layout::{Layout, Direction, Constraint};
 use ratatui::widgets::ListState;
@@ -50,7 +50,8 @@ impl App {
             list_state: state, 
             focus: FocusScreen::Files, 
             popup: Popup::None, 
-            max_name_width: MIN_NAME_WIDTH }
+            max_name_width: MIN_NAME_WIDTH 
+        }
     }
 
     pub fn spawn_light_worker(&mut self, sender: Option<mpsc::Sender<Result<LightWorkerResponse, LightWorkerError>>>, receiver: Option<mpsc::Receiver<LightWorkerMessage>>) {
@@ -81,8 +82,8 @@ impl App {
 
             // input handling
             if crossterm::event::poll(Duration::from_millis(50))? {
-                if let Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) = crossterm::event::read()? {
-                    if code == KeyCode::Char('q') {
+                if let Event::Key(KeyEvent { code, kind: KeyEventKind::Press, modifiers, .. }) = crossterm::event::read()? {
+                    if code == KeyCode::Char('q') || (modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c')) {
                         self.file_manager.shutdown();
                         break Ok(());
                     }
@@ -97,11 +98,20 @@ impl App {
                         match response {
                             LightWorkerResponse::Loaded(_, _) => {
                                 self.file_manager.consume_response(response);
-                                self.list_state.select(self.min_selected());
+                                let min = self.min_selected();
+                                self.list_state.select(min);
+                                if let Some(min) = min {
+                                    let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(min));
+                                }
+                            },
+                            LightWorkerResponse::Read(..) => {
+                                self.file_manager.consume_response(response);
                             },
                         }
                     },
-                    Err(error) => eprintln!("Error: {}", error),
+                    Err(error) => {
+                        eprintln!("Error: {}", error);
+                    },
                 }
             }
         }
@@ -115,13 +125,18 @@ impl App {
                 }
                 let selected = match self.list_state.selected() {
                     Some(selected) => selected,
-                    None => 0,
+                    None => {
+                        self.list_state.select(Some(0));
+                        return;
+                    },
                 };
                 if selected == 0 {
                     self.list_state.select(Some(self.file_manager.files().len() - 1));
+                    let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(self.file_manager.files().len() - 1));
                 }
                 else {
                     self.list_state.scroll_up_by(1);
+                    let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(selected - 1));
                 }
             },
             KeyCode::Down => {
@@ -130,13 +145,18 @@ impl App {
                 }
                 let selected = match self.list_state.selected() {
                     Some(selected) => selected,
-                    None => 0,
+                    None => {
+                        self.list_state.select(Some(0));
+                        return;
+                    },
                 };
                 if selected == self.file_manager.files().len() - 1 {
                     self.list_state.select(Some(0));
+                    let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(0));
                 }
                 else {
                     self.list_state.scroll_down_by(1);
+                    let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(selected + 1));
                 }
             },
             KeyCode::Enter => {
@@ -225,7 +245,7 @@ impl Widget for &mut App {
         // render the path
         let _path_display = Paragraph::new(Text::from(self.file_manager.path().to_string_lossy().to_string())).block(Block::default().padding(Padding::new(1, 0, 1, 0))).left_aligned().render(files_layout[0], buf);
 
-        let _preview_display = Paragraph::new(Text::from("")).block(Block::default().title(Line::from(" Preview ").centered())).render(main_layout[1], buf);
+        let _preview_display = Paragraph::new(Text::from(self.file_manager.selected_file_preview_buffer())).block(Block::default().title(Line::from(" Preview ").centered())).render(main_layout[1], buf);
     
     }
 }

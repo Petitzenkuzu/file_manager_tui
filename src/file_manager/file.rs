@@ -36,6 +36,15 @@ impl File {
     pub fn size(&self) -> &Size {
         &self.size
     }
+    pub fn is_file(&self) -> bool {
+        matches!(self.file_type, FileType::File)
+    }
+    pub fn is_folder(&self) -> bool {
+        matches!(self.file_type, FileType::Folder)
+    }
+    pub fn is_link(&self) -> bool {
+        matches!(self.file_type, FileType::Link { .. })
+    }
 
     pub fn modified_time_to_string(&self) -> String {
         let datetime : DateTime<Local> = DateTime::from(self.modified_time);

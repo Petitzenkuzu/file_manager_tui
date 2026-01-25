@@ -47,6 +47,9 @@ impl FsLightWorker {
             LightWorkerAction::Load(path) => {
                 self.load(path)
             },
+            LightWorkerAction::Read(path) => {
+                self.read(path)
+            },
         }
     }
 
@@ -59,6 +62,19 @@ impl FsLightWorker {
             Err(e) => Err(LightWorkerError::LoadFailed(e)),
         }
     }
+
+    fn read(&mut self, path: PathBuf) -> Result<(), LightWorkerError> {
+        match self.service.read(&path) {
+            Ok(response) => {
+                self.output_channel.send(Ok(LightWorkerResponse::Read(response, path)))?;
+                Ok(())
+            },
+            Err(e) => {
+                self.output_channel.send(Err(LightWorkerError::ReadFailed(e)))?;
+                Ok(())
+            }
+        }
+    }
 }
 
 pub enum LightWorkerMessage {
@@ -68,16 +84,20 @@ pub enum LightWorkerMessage {
 
 pub enum LightWorkerAction {
     Load(PathBuf),
+    Read(PathBuf),
 }
 
 pub enum LightWorkerResponse {
-    Loaded(Vec<File>, PathBuf)
+    Loaded(Vec<File>, PathBuf),
+    Read(String, PathBuf)
 }
 
 #[derive(Error, Debug)] 
 pub enum LightWorkerError {
     #[error("Error loading files: {0}")]
     LoadFailed(LightServiceError),
+    #[error("Error reading file: {0}")]
+    ReadFailed(LightServiceError),
     #[error("Error receiving message: UI is dead")]
     ReceiveMessageFailed,
     #[error("Error sending response: UI is dead")]
