@@ -12,13 +12,11 @@ use crate::file::FileType;
 
 pub enum Popup {
     Create{file_type: FileType, name: String},
-    None,
 }
 
 impl Widget for &mut Popup {
     fn render(self, area: Rect, buf: &mut Buffer) {
         match self {
-            Popup::None => return,
             Popup::Create{file_type, name} => {
                 let display_square = area.centered(Constraint::Length(20), Constraint::Length(20));
                 let display_square = Block::bordered().border_style(Style::default().fg(Color::White)).render(display_square, buf);

@@ -135,7 +135,14 @@ impl FileManager {
         Ok(())
     }
 
-    fn read_content(&mut self, index: usize) -> Result<(), FileManagerError> {
+    fn read_content(&mut self, index: Option<usize>) -> Result<(), FileManagerError> {
+        let index = match index {
+            Some(index) => index,
+            None => return Ok(()),
+        };
+        if index >= self.files().len() {
+            return Ok(());
+        }
         if !matches!(self.files()[index].file_type(),FileType::File) {
             self.selected_file_preview_buffer = String::from("No preview available");
             return Ok(());
@@ -155,7 +162,7 @@ pub enum FileManagerAction {
     Open(usize),
     GoToParent,
     Reload,
-    ReadContent(usize),
+    ReadContent(Option<usize>),
     CreateFolder(String),
 }
 
