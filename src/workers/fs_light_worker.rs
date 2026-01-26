@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 use std::path::PathBuf;
-use crate::file_manager::File;
+use crate::file::File;
 use thiserror::Error;
 use crate::workers::LightServiceError;
 use crate::workers::FsLightService;

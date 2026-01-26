@@ -1,6 +1,8 @@
 mod file_manager;
 use file_manager::FileManager;
 
+mod file;
+
 mod app;
 use app::App;
 

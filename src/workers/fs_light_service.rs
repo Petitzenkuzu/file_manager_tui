@@ -2,7 +2,7 @@ use thiserror::Error;
 use std::path::PathBuf;
 use std::fs;
 use std::fs::DirEntry;
-use crate::file_manager::File;
+use crate::file::File;
 use std::fs::OpenOptions;
 use std::io::Read;
 pub struct FsLightService;

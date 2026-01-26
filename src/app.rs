@@ -1,4 +1,5 @@
-use crate::file_manager::{FileManager, FileManagerAction, FileType};
+use crate::file_manager::{FileManager, FileManagerAction};
+use crate::file::FileType;
 use crate::workers::{LightWorkerResponse, LightWorkerError, LightWorkerMessage, FsLightWorker};
 use ratatui::{
     buffer::Buffer, layout::Rect, text::{Line, Text}, widgets::{Block, List, Padding, Paragraph, StatefulWidget, Widget}
@@ -109,8 +110,8 @@ impl App {
                             },
                         }
                     },
-                    Err(error) => {
-                        eprintln!("Error: {}", error);
+                    Err(_error) => {
+                        self.file_manager.increment_light_sync_id();
                     },
                 }
             }

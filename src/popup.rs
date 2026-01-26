@@ -8,7 +8,7 @@ use std::time::Duration;
 use ratatui::layout::{Layout, Direction, Constraint};
 use std::path::PathBuf;
 use ratatui::widgets::ListState;
-use crate::file_manager::FileType;
+use crate::file::FileType;
 
 pub enum Popup {
     Create{file_type: FileType, name: String},

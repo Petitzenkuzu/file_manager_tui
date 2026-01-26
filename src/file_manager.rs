@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::fs;
 use thiserror::Error;
-use crate::file_manager::{File, FileType};
+use crate::file::{File, FileType};
 use std::sync::mpsc;
 use crate::workers::LightWorkerMessage;
 use crate::workers::LightWorkerAction;
