@@ -118,7 +118,7 @@ impl App {
     pub fn handle_files_input(&mut self, event: Event) {
         if let Event::Key(KeyEvent { code, kind: KeyEventKind::Press, modifiers, .. }) = event {
             match code {
-                KeyCode::Up => {
+                KeyCode::Up | KeyCode::Char('k') => {
                     if self.file_manager.files().is_empty() {
                         return;
                     }
@@ -152,7 +152,7 @@ impl App {
                     self.list_state.select(Some(selected));
                     let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(self.list_state.selected()));
                 },
-                KeyCode::Down => {
+                KeyCode::Down | KeyCode::Char('j') => {
                     if self.file_manager.files().is_empty() {
                         return;
                     }
@@ -176,14 +176,14 @@ impl App {
                     self.list_state.select(Some(selected));
                     let _ = self.file_manager.dispatch(FileManagerAction::ReadContent(self.list_state.selected()));
                 },
-                KeyCode::Enter => {
+                KeyCode::Enter | KeyCode::Char('l') => {
                     let selected = match self.list_state.selected() {
                         Some(selected) => selected,
                         None => return,
                     };
                     let _ = self.file_manager.dispatch(FileManagerAction::Open(selected));
                 },
-                KeyCode::Backspace => {
+                KeyCode::Backspace | KeyCode::Char('h') => {
                     let _ = self.file_manager.dispatch(FileManagerAction::GoToParent);
                 },
                 KeyCode::F(5) => {
