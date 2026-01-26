@@ -7,6 +7,7 @@ use crate::workers::LightWorkerMessage;
 use crate::workers::LightWorkerAction;
 use std::sync::mpsc::SendError;
 use crate::workers::LightWorkerResponse;
+use opener;
 
 pub struct FileManager {
     path: PathBuf,
@@ -96,7 +97,7 @@ impl FileManager {
     }
 
     fn open_file(&self, path: PathBuf) -> Result<(), FileManagerError> {
-        std::process::Command::new("cmd").arg("/c").arg("start").arg(path.to_string_lossy().to_string()).spawn().map_err(|_e| FileManagerError::OpenFileFailed("Failed to open file".to_string()))?;
+        opener::open(path).map_err(|_e| FileManagerError::OpenFileFailed("Failed to open file".to_string()))?;
         Ok(())
     }
 
